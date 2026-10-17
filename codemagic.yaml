@@ -1,4 +1,6 @@
-# Codemagic CI for Sökmotorn – unsigned IPA (no signing, no integrations).
+# Codemagic CI for Sökmotorn.
+# - ios-unsigned-ipa: sideload IPA (no signing)
+# - ios-testflight: signed IPA → TestFlight (internal Testers group)
 workflows:
   ios-unsigned-ipa:
     name: iOS – unsigned IPA
@@ -28,3 +30,54 @@ workflows:
         notify:
           success: true
           failure: true
+
+  ios-testflight:
+    name: iOS – TestFlight
+    max_build_duration: 120
+    instance_type: mac_mini_m2
+    # Change CodemagicASCKey if your App Store Connect integration has a different name in Codemagic.
+    integrations:
+      app_store_connect: CodemagicASCKey
+    environment:
+      flutter: stable
+      xcode: latest
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: se.klasholmgren.sokmotorn
+      vars:
+        BUNDLE_ID: se.klasholmgren.sokmotorn
+        # Replace TBD with the App Store Connect Apple ID (App Information → Apple ID).
+        APP_STORE_APPLE_ID: TBD
+    triggering:
+      events: []   # manual start only
+    scripts:
+      - name: Get packages
+        script: flutter pub get
+      - name: Set up code signing profiles
+        script: xcode-project use-profiles
+      - name: Set build number from TestFlight
+        script: |
+          LATEST=$(app-store-connect get-latest-testflight-build-number "$APP_STORE_APPLE_ID" 2>/dev/null || echo 0)
+          export BUILD_NUMBER=$((LATEST + 1))
+          echo "BUILD_NUMBER=$BUILD_NUMBER" >> $CM_ENV
+          echo "Using build number $BUILD_NUMBER"
+      - name: Flutter build IPA
+        script: |
+          flutter build ipa --release \
+            --export-options-plist=/Users/builder/export_options.plist \
+            --build-number=$BUILD_NUMBER
+    artifacts:
+      - build/ios/ipa/*.ipa
+    publishing:
+      email:
+        recipients:
+          - admin@klasholmgren.se
+        notify:
+          success: true
+          failure: true
+      app_store_connect:
+        auth: integration
+        # Internal testers do not need beta review; build goes to the internal group automatically.
+        submit_to_testflight: false
+        beta_groups:
+          - Testers
