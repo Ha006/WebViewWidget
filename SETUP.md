@@ -9,5 +9,5 @@
 ## TestFlight (`ios-testflight`)
 
 1. In Codemagic, ensure the App Store Connect integration is named **`CodemagicASCKey`** (or change that name in `codemagic.yaml`).
-2. Set **`APP_STORE_APPLE_ID`** in `codemagic.yaml` (App Store Connect → App Information → Apple ID). Leave as `TBD` until you have it.
+2. `APP_STORE_APPLE_ID` is set to `6823956561` in `codemagic.yaml`.
 3. Run workflow **`ios-testflight`**. The IPA is uploaded to App Store Connect; internal group **Testers** gets the build (no beta review). You also get an email at admin@klasholmgren.se.

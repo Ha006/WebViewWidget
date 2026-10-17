@@ -46,8 +46,8 @@ workflows:
         bundle_identifier: se.klasholmgren.sokmotorn
       vars:
         BUNDLE_ID: se.klasholmgren.sokmotorn
-        # Replace TBD with the App Store Connect Apple ID (App Information → Apple ID).
-        APP_STORE_APPLE_ID: TBD
+        # App Store Connect Apple ID (App Information → Apple ID).
+        APP_STORE_APPLE_ID: "6823956561"
     triggering:
       events: []   # manual start only
     scripts:
