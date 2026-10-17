@@ -35,26 +35,36 @@ workflows:
     name: iOS – TestFlight
     max_build_duration: 120
     instance_type: mac_mini_m2
-    # Change CodemagicASCKey if your App Store Connect integration has a different name in Codemagic.
+    # Must match the App Store Connect API key name in Codemagic UI (same as KeyMatch).
     integrations:
       app_store_connect: CodemagicASCKey
     environment:
       flutter: stable
       xcode: latest
-      ios_signing:
-        distribution_type: app_store
-        bundle_identifier: se.klasholmgren.sokmotorn
+      # Signing is handled explicitly in the scripts below (same pattern as KeyMatch-App).
       vars:
         BUNDLE_ID: se.klasholmgren.sokmotorn
         # App Store Connect Apple ID (App Information → Apple ID).
         APP_STORE_APPLE_ID: "6823956561"
+      groups:
+        - code_signing    # provides CERTIFICATE_PRIVATE_KEY
     triggering:
       events: []   # manual start only
     scripts:
+      - name: Initialize keychain
+        script: keychain initialize
+      - name: Fetch / create signing files
+        script: |
+          app-store-connect fetch-signing-files "$BUNDLE_ID" \
+            --type IOS_APP_STORE \
+            --certificate-key "@env:CERTIFICATE_PRIVATE_KEY" \
+            --create
+      - name: Add certificates to keychain
+        script: keychain add-certificates
+      - name: Set up code signing settings on Xcode project
+        script: xcode-project use-profiles
       - name: Get packages
         script: flutter pub get
-      - name: Set up code signing profiles
-        script: xcode-project use-profiles
       - name: Set build number from TestFlight
         script: |
           LATEST=$(app-store-connect get-latest-testflight-build-number "$APP_STORE_APPLE_ID" 2>/dev/null || echo 0)
