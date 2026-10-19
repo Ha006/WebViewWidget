@@ -1,0 +1,93 @@
+# Codemagic CI for Sökmotorn.
+# - ios-unsigned-ipa: sideload IPA (no signing)
+# - ios-testflight: signed IPA → TestFlight (internal Testers group)
+workflows:
+  ios-unsigned-ipa:
+    name: iOS – unsigned IPA
+    max_build_duration: 60
+    instance_type: mac_mini_m2
+    environment:
+      flutter: stable
+      xcode: latest
+    triggering:
+      events: []   # manual start only
+    scripts:
+      - name: Get packages
+        script: flutter pub get
+      - name: Build iOS (no codesign)
+        script: flutter build ios --release --no-codesign
+      - name: Package IPA
+        script: |
+          mkdir Payload
+          cp -r build/ios/iphoneos/Runner.app Payload/
+          zip -r Sokmotorn.ipa Payload
+    artifacts:
+      - Sokmotorn.ipa
+    publishing:
+      email:
+        recipients:
+          - admin@klasholmgren.se
+        notify:
+          success: true
+          failure: true
+
+  ios-testflight:
+    name: iOS – TestFlight
+    max_build_duration: 120
+    instance_type: mac_mini_m2
+    # Must match the App Store Connect API key name in Codemagic UI (same as KeyMatch).
+    integrations:
+      app_store_connect: CodemagicASCKey
+    environment:
+      flutter: stable
+      xcode: latest
+      # Signing is handled explicitly in the scripts below (same pattern as KeyMatch-App).
+      vars:
+        BUNDLE_ID: se.klasholmgren.sokmotorn
+        # App Store Connect Apple ID (App Information → Apple ID).
+        APP_STORE_APPLE_ID: "6823956561"
+      groups:
+        - code_signing    # provides CERTIFICATE_PRIVATE_KEY
+    triggering:
+      events: []   # manual start only
+    scripts:
+      - name: Initialize keychain
+        script: keychain initialize
+      - name: Fetch / create signing files
+        script: |
+          app-store-connect fetch-signing-files "$BUNDLE_ID" \
+            --type IOS_APP_STORE \
+            --certificate-key "@env:CERTIFICATE_PRIVATE_KEY" \
+            --create
+      - name: Add certificates to keychain
+        script: keychain add-certificates
+      - name: Set up code signing settings on Xcode project
+        script: xcode-project use-profiles
+      - name: Get packages
+        script: flutter pub get
+      - name: Set build number from TestFlight
+        script: |
+          LATEST=$(app-store-connect get-latest-testflight-build-number "$APP_STORE_APPLE_ID" 2>/dev/null || echo 0)
+          export BUILD_NUMBER=$((LATEST + 1))
+          echo "BUILD_NUMBER=$BUILD_NUMBER" >> $CM_ENV
+          echo "Using build number $BUILD_NUMBER"
+      - name: Flutter build IPA
+        script: |
+          flutter build ipa --release \
+            --export-options-plist=/Users/builder/export_options.plist \
+            --build-number=$BUILD_NUMBER
+    artifacts:
+      - build/ios/ipa/*.ipa
+    publishing:
+      email:
+        recipients:
+          - admin@klasholmgren.se
+        notify:
+          success: true
+          failure: true
+      app_store_connect:
+        auth: integration
+        # Internal testers do not need beta review; build goes to the internal group automatically.
+        submit_to_testflight: false
+        beta_groups:
+          - Testers
